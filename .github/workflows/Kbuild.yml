@@ -46,7 +46,7 @@ jobs:
       - name: Get Kernel Source
         run: |
           git clone --recursive https://github.com/WenHao2130/android_kernel_oppo_sdm660_4.4.153/ -b ${{ matrix.branch }} --depth 1 $GITHUB_WORKSPACE/workdir/source
-          
+
           if [ "${{ matrix.branch }}" = "ksu" ]; then
             cd $GITHUB_WORKSPACE/workdir/source
             git submodule update --init --recursive
@@ -113,6 +113,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download all Kernel Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -122,10 +125,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="kernel_release_$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
+          TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
           echo "Release Tag: $TAG_NAME"
           gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
-      
+
       - name: Upload Kernel & AnyKernel3 to Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
