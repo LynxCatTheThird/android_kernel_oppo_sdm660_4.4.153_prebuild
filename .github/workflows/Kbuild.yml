@@ -126,5 +126,6 @@ jobs:
         run: |
           TAG_NAME=$(gh release list --json tagName --jq '.[0].tagName')
           for file in $(find releases -type f); do
-            gh release upload "$TAG_NAME" "$file"
+            NEW_NAME=$(basename "$file" | sed "s/Image.gz-dtb/kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}.img/")
+            gh release upload "$TAG_NAME" "$file#${NEW_NAME}" --clobber
           done
