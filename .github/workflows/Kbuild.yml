@@ -3,6 +3,9 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Kernel for ${{ matrix.device }} (${{ matrix.branch }})
@@ -34,11 +37,6 @@ jobs:
         run: |
           CLANG_URL=$(curl -s https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt)
           CLANG_FILENAME=$(basename $CLANG_URL)
-          CLANG_VERSION=${CLANG_FILENAME#Clang-}
-          CLANG_VERSION=${CLANG_VERSION%.tar.gz}
-          echo "CLANG_URL=$CLANG_URL" >> $GITHUB_ENV
-          echo "CLANG_FILENAME=$CLANG_FILENAME" >> $GITHUB_ENV
-          echo "CLANG_VERSION=$CLANG_VERSION" >> $GITHUB_ENV
           wget $CLANG_URL -O $GITHUB_WORKSPACE/workdir/$CLANG_FILENAME
           mkdir $GITHUB_WORKSPACE/workdir/clang
           tar zxvf $GITHUB_WORKSPACE/workdir/$CLANG_FILENAME -C $GITHUB_WORKSPACE/workdir/clang
@@ -50,8 +48,6 @@ jobs:
           if [ "${{ matrix.branch }}" = "ksu" ]; then
             cd $GITHUB_WORKSPACE/workdir/source
             git submodule update --init --recursive
-            export KSU_VERSION=$(grep -Po 'VERSION_NAME := \K.*' KernelSU/version.mk)
-            echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
           fi
 
       - name: Build Kernel
@@ -81,7 +77,7 @@ jobs:
         if: env.CHECK_FILE_IS_OK == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}
+          name: Kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}
           path: workdir/source/out/arch/arm64/boot/Image.gz-dtb
 
       - name: Make AnyKernel3 Package
@@ -90,12 +86,7 @@ jobs:
           git clone https://github.com/WenHao2130/android_kernel_oppo_sdm660_4.4.153/ -b prebuilt_ak3 --depth 1 $GITHUB_WORKSPACE/workdir/ak3
           rm -r $GITHUB_WORKSPACE/workdir/ak3/.git
           cp $GITHUB_WORKSPACE/workdir/source/out/arch/arm64/boot/Image.gz-dtb $GITHUB_WORKSPACE/workdir/ak3
-
-          if [ "${{ matrix.branch }}" = "ksu" ]; then
-            ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_ksu_KSU-${{ env.KSU_VERSION }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}.zip"
-          else
-            ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_${{ matrix.branch }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}.zip"
-          fi
+          ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}.zip"
 
           cd $GITHUB_WORKSPACE/workdir
           zip -r $ZIP_NAME ak3
