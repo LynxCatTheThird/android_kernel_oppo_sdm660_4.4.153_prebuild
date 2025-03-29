@@ -1,4 +1,4 @@
-name: Build Kernel from OPPO R11
+name: Build Kernel for OPPO SDM660
 on:
   workflow_call:
   workflow_dispatch:
@@ -87,7 +87,7 @@ jobs:
       - name: Make AnyKernel3 Package
         if: env.CHECK_FILE_IS_OK == 'true'
         run: |
-          git clone https://github.com/$GITHUB_REPOSITORY/ -b prebuilt_ak3 --depth 1 $GITHUB_WORKSPACE/workdir/ak3
+          git clone https://github.com/WenHao2130/android_kernel_oppo_sdm660_4.4.153/ -b prebuilt_ak3 --depth 1 $GITHUB_WORKSPACE/workdir/ak3
           rm -r $GITHUB_WORKSPACE/workdir/ak3/.git
           cp $GITHUB_WORKSPACE/workdir/source/out/arch/arm64/boot/Image.gz-dtb $GITHUB_WORKSPACE/workdir/ak3
 
@@ -124,7 +124,7 @@ jobs:
         run: |
           TAG_NAME="kernel_release_$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
           echo "Release Tag: $TAG_NAME"
-          gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "OPPO R11 Kernel Build - $(date '+%Y-%m-%d %H:%M:%S')"
+          gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
       
       - name: Upload Kernel & AnyKernel3 to Release
         env:
