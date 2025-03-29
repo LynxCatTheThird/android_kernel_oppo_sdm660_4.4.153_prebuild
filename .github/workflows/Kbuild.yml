@@ -1,0 +1,136 @@
+name: Build Kernel from OPPO R11
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Kernel for ${{ matrix.device }} (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        device: [16051, 17011, 18005]
+        branch: [master, ksu]
+
+    steps:
+      - name: Set SWAP to 5GiB
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 5
+
+      - name: Initialize Compilation Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git automake flex lzop bison gperf build-essential zip curl \
+            zlib1g-dev libbz2-dev squashfs-tools schedtool dpkg-dev liblz4-tool \
+            make maven libssl-dev minicom bc libx11-dev xsltproc unzip \
+            device-tree-compiler python3
+          mkdir -p $GITHUB_WORKSPACE/workdir
+          cd $GITHUB_WORKSPACE/workdir
+          echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%Y%m%d%H%M")" >> $GITHUB_ENV
+
+      - name: Get Latest Clang Toolchain
+        run: |
+          CLANG_URL=$(curl -s https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt)
+          CLANG_FILENAME=$(basename $CLANG_URL)
+          CLANG_VERSION=${CLANG_FILENAME#Clang-}
+          CLANG_VERSION=${CLANG_VERSION%.tar.gz}
+          echo "CLANG_URL=$CLANG_URL" >> $GITHUB_ENV
+          echo "CLANG_FILENAME=$CLANG_FILENAME" >> $GITHUB_ENV
+          echo "CLANG_VERSION=$CLANG_VERSION" >> $GITHUB_ENV
+          wget $CLANG_URL -O $GITHUB_WORKSPACE/workdir/$CLANG_FILENAME
+          mkdir $GITHUB_WORKSPACE/workdir/clang
+          tar zxvf $GITHUB_WORKSPACE/workdir/$CLANG_FILENAME -C $GITHUB_WORKSPACE/workdir/clang
+
+      - name: Get Kernel Source
+        run: |
+          git clone --recursive https://github.com/WenHao2130/android_kernel_oppo_sdm660_4.4.153/ -b ${{ matrix.branch }} --depth 1 $GITHUB_WORKSPACE/workdir/source
+          
+          if [ "${{ matrix.branch }}" = "ksu" ]; then
+            cd $GITHUB_WORKSPACE/workdir/source
+            git submodule update --init --recursive
+            export KSU_VERSION=$(grep -Po 'VERSION_NAME := \K.*' KernelSU/version.mk)
+            echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+          fi
+
+      - name: Build Kernel
+        run: |
+          export KBUILD_BUILD_HOST=Github-Action
+          export KBUILD_BUILD_USER=$(echo ${{ github.actor }})
+          export ARCH="arm64"
+          export SUBARCH="arm64"
+          export PATH="$GITHUB_WORKSPACE/workdir/clang/bin/:$PATH"
+          export CROSS_COMPILE="aarch64-linux-gnu-"
+          cd $GITHUB_WORKSPACE/workdir/source
+          export OPPO_TARGET_DEVICE="MSM_${{ matrix.device }}"
+          make O=out sdm660-perf_defconfig CC=clang
+          make -j$(nproc --all) O=out CC=clang
+
+      - name: Check Kernel Output Files
+        run: |
+          cd $GITHUB_WORKSPACE/workdir/source
+          if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
+              echo "CHECK_FILE_IS_OK=true" >> $GITHUB_ENV
+          else
+              echo "Kernel output file is empty"
+              exit 1
+          fi
+
+      - name: Upload Kernel Artifact
+        if: env.CHECK_FILE_IS_OK == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}
+          path: workdir/source/out/arch/arm64/boot/Image.gz-dtb
+
+      - name: Make AnyKernel3 Package
+        if: env.CHECK_FILE_IS_OK == 'true'
+        run: |
+          git clone https://github.com/$GITHUB_REPOSITORY/ -b prebuilt_ak3 --depth 1 $GITHUB_WORKSPACE/workdir/ak3
+          rm -r $GITHUB_WORKSPACE/workdir/ak3/.git
+          cp $GITHUB_WORKSPACE/workdir/source/out/arch/arm64/boot/Image.gz-dtb $GITHUB_WORKSPACE/workdir/ak3
+
+          if [ "${{ matrix.branch }}" = "ksu" ]; then
+            ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_ksu_KSU-${{ env.KSU_VERSION }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}.zip"
+          else
+            ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_${{ matrix.branch }}_${{ env.CLANG_VERSION }}_${{ env.BUILD_TIME }}.zip"
+          fi
+
+          cd $GITHUB_WORKSPACE/workdir
+          zip -r $ZIP_NAME ak3
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload AnyKernel3 Artifact
+        if: env.CHECK_FILE_IS_OK == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: workdir/${{ env.ZIP_NAME }}
+
+  release:
+    name: Create Release and Upload Assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all Kernel Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: releases
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="kernel_release_$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
+          echo "Release Tag: $TAG_NAME"
+          gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "OPPO R11 Kernel Build - $(date '+%Y-%m-%d %H:%M:%S')"
+      
+      - name: Upload Kernel & AnyKernel3 to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=$(gh release list --json tagName --jq '.[0].tagName')
+          for file in $(find releases -type f); do
+            gh release upload "$TAG_NAME" "$file"
+          done
