@@ -98,6 +98,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Create Git Tag
+        run: |
+          TAG_NAME=$(date +'%Y%m%d%H%M%S')
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
       - name: Download all Kernel Artifacts
         uses: actions/download-artifact@v4
 
