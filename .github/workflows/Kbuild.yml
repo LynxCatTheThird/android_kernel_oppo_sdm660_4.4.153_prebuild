@@ -24,10 +24,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git automake flex lzop bison gperf build-essential zip curl \
-            zlib1g-dev libbz2-dev squashfs-tools schedtool dpkg-dev liblz4-tool \
-            make maven libssl-dev minicom bc libx11-dev xsltproc unzip \
-            device-tree-compiler python3
+            git automake flex lzop bison gperf build-essential zip curl zlib1g-dev libbz2-dev squashfs-tools schedtool dpkg-dev liblz4-tool make ccache maven libssl-dev minicom bc libx11-dev xsltproc unzip device-tree-compiler python3
           echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%Y%m%d%H%M")" >> $GITHUB_ENV
 
       - name: Get Latest Clang Toolchain
@@ -47,6 +44,16 @@ jobs:
             git submodule update --init --recursive
           fi
 
+          KSU_VERSION=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
+          echo "UPLOADNAME=-KernelSU_$KSU_VERSION" >> $GITHUB_ENV
+
+      - name: Setup ccache
+        if: env.ENABLE_CCACHE == 'true'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: build-kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.UPLOADNAME }}
+          max-size: 2G
+
       - name: Build Kernel
         run: |
           export KBUILD_BUILD_HOST=Github-Action
@@ -58,7 +65,7 @@ jobs:
           cd $GITHUB_WORKSPACE/source
           export OPPO_TARGET_DEVICE="MSM_${{ matrix.device }}"
           make O=out sdm660-perf_defconfig CC=clang
-          make -j$(nproc --all) O=out CC=clang
+          make -j$(nproc --all) O=out CC="ccache  clang"
 
       - name: Check Kernel Output Files
         run: |
@@ -92,38 +99,3 @@ jobs:
         with:
           name: ${{ env.ZIP_NAME }}
           path: ak3/*
-
-  release:
-    name: Create Release and Upload Assets
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Download all Kernel Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: releases
-
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
-          echo "Release Tag: $TAG_NAME"
-          gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
-
-      - name: Upload Kernel & AnyKernel3 to Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME=$(gh release list --json tagName --jq '.[0].tagName')
-          for file in $(find releases -type f); do
-            if [[ "$(basename "$file")" == "Image.gz-dtb" ]]; then
-              NEW_NAME="kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}.img"
-              gh release upload "$TAG_NAME" "$file#${NEW_NAME}" --clobber
-            else
-              gh release upload "$TAG_NAME" "$file" --clobber
-            fi
-          done
