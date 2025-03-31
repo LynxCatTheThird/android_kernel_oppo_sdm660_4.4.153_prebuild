@@ -114,7 +114,7 @@ jobs:
           echo "Release Tag: $TAG_NAME"
           gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
 
-      - name: Debug: List downloaded files
+      - name: List downloaded files
         run: ls -R releases
 
       - name: Upload AnyKernel3 to Release
