@@ -83,7 +83,7 @@ jobs:
           git clone https://github.com/WenHao2130/android_kernel_oppo_sdm660_4.4.153/ -b prebuilt_ak3 --depth 1 $GITHUB_WORKSPACE/ak3
           rm -r $GITHUB_WORKSPACE/ak3/.git
           cp $GITHUB_WORKSPACE/source/out/arch/arm64/boot/Image.gz-dtb $GITHUB_WORKSPACE/ak3
-          ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}.zip"
+          ZIP_NAME="AnyKernel3_oppo_sdm660_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}"
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload AnyKernel3 Artifact
