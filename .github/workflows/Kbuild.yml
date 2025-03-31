@@ -112,24 +112,18 @@ jobs:
         run: |
           TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
           echo "Release Tag: $TAG_NAME"
-
           gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
 
-      - name: List downloaded files
-        run: ls -R releases
-
-      - name: Upload AnyKernel3 to Release
+      - name: Upload Kernel & AnyKernel3 to Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
-          echo "Uploading files to Release: $TAG_NAME"
-
-          for file in releases/AnyKernel3_*.zip; do
-              if [ -f "$file" ]; then
-                  echo "Uploading $file..."
-                  gh release upload "$TAG_NAME" "$file" --clobber || echo "Failed to upload $file"
-              else
-                  echo "File not found: $file"
-              fi
+          TAG_NAME=$(gh release list --json tagName --jq '.[0].tagName')
+          for file in $(find releases -type f); do
+            if [[ "$(basename "$file")" == "Image.gz-dtb" ]]; then
+              NEW_NAME="kernel_${{ matrix.device }}_${{ matrix.branch }}_${{ env.BUILD_TIME }}.img"
+              gh release upload "$TAG_NAME" "$file#${NEW_NAME}" --clobber
+            else
+              gh release upload "$TAG_NAME" "$file" --clobber
+            fi
           done
