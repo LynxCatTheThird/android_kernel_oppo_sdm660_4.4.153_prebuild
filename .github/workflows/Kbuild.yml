@@ -112,6 +112,7 @@ jobs:
         run: |
           TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
           echo "Release Tag: $TAG_NAME"
+
           gh release create "$TAG_NAME" --title "Kernel Build $TAG_NAME" --notes "$(date '+%Y-%m-%d %H:%M:%S')"
 
       - name: List downloaded files
@@ -121,8 +122,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME=$(gh release list --json tagName --jq '.[0].tagName')
-          for file in $(find releases -type f -name "AnyKernel3_*.zip"); do
-            gh release upload "$TAG_NAME" "$file" --clobber
-          done
+          TAG_NAME="$(TZ=Asia/Shanghai date '+%Y%m%d%H%M')"
+          echo "Uploading files to Release: $TAG_NAME"
 
+          for file in releases/AnyKernel3_*.zip; do
+              if [ -f "$file" ]; then
+                  echo "Uploading $file..."
+                  gh release upload "$TAG_NAME" "$file" --clobber || echo "Failed to upload $file"
+              else
+                  echo "File not found: $file"
+              fi
+          done
