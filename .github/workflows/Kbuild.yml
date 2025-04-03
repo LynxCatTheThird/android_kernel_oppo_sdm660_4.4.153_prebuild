@@ -51,7 +51,7 @@ jobs:
           cd $GITHUB_WORKSPACE/source
           export OPPO_TARGET_DEVICE="MSM_${{ matrix.device }}"
           make O=out sdm660-perf_defconfig CC=clang
-          make -j$(nproc --all) O=out CC="ccache  clang"
+          make -j$(nproc --all) O=out CC=clang
 
       - name: Check Kernel Output Files
         run: |
